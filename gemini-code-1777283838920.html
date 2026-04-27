@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STRUCTCALC — Structural Analysis App</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#171b26;--bg3:#1e2435;--bg4:#252b3b;
+  --accent:#4f8ef7;--accent2:#7c3aed;--accent3:#10b981;--accent4:#f59e0b;
+  --danger:#ef4444;--text:#e2e8f0;--muted:#64748b;--border:#2a3148;
+  --canvas-bg:#0a0d16;--grid:#1a1f30;
+}
+body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:13px}
+.topbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.logo{font-weight:600;font-size:15px;color:var(--accent);letter-spacing:.5px}
+.logo span{color:var(--text);opacity:.6}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.tool-group{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.tool-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);cursor:pointer;font-family:'Sora',sans-serif;font-size:12px;transition:all .15s;white-space:nowrap}
+.tool-btn:hover{background:var(--bg4);color:var(--text);border-color:var(--accent)}
+.tool-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tool-btn svg{width:14px;height:14px;flex-shrink:0}
+.spacer{flex:1}
+.btn-solve{padding:6px 18px;background:var(--accent3);color:#fff;border:none;border-radius:6px;font-family:'Sora',sans-serif;font-weight:500;font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-solve:hover{background:#059669;transform:translateY(-1px)}
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-section{padding:10px 12px;border-bottom:1px solid var(--border)}
+.sidebar-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.prop-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px}
+.prop-label{font-size:11px;color:var(--muted);flex-shrink:0}
+.prop-input{width:80px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;text-align:right}
+.prop-input:focus{outline:none;border-color:var(--accent)}
+.support-list{display:flex;flex-direction:column;gap:4px}
+.support-item{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg3);border-radius:5px;border:1px solid var(--border);font-size:11px;flex-wrap:wrap}
+.support-del{margin-left:auto;cursor:pointer;color:var(--danger);opacity:.5;font-size:16px;line-height:1;flex-shrink:0}
+.support-del:hover{opacity:1}
+.load-list{display:flex;flex-direction:column;gap:4px}
+.load-item{display:flex;align-items:center;gap:5px;padding:5px 8px;background:var(--bg3);border-radius:5px;border:1px solid var(--border);font-size:11px;flex-wrap:wrap}
+.load-del{margin-left:auto;cursor:pointer;color:var(--danger);opacity:.5;font-size:16px;line-height:1;flex-shrink:0}
+.load-del:hover{opacity:1}
+.canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;background:var(--canvas-bg)}
+canvas{position:absolute;top:0;left:0;cursor:crosshair}
+.canvas-hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(15,17,23,.85);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;color:var(--muted);pointer-events:none;white-space:nowrap}
+.results-panel{height:200px;background:var(--bg2);border-top:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.results-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg3);flex-shrink:0}
+.rtab{padding:7px 14px;font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.rtab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.results-content{flex:1;display:flex;overflow:hidden;position:relative}
+.diagram-wrap{flex:1;position:relative;overflow:hidden}
+.diagram-canvas{width:100%;height:100%;display:block}
+.results-summary{width:160px;background:var(--bg2);border-left:1px solid var(--border);padding:10px;display:none;flex-direction:column;gap:8px;overflow-y:auto;flex-shrink:0}
+.sum-box{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 8px}
+.sum-label{font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px}
+.sum-val{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:500}
+.info-bar{display:flex;gap:12px;padding:4px 12px;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.info-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.info-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.node-count{font-family:'JetBrains Mono',monospace}
+select.prop-input{cursor:pointer}
+.color-pick{display:flex;gap:4px;flex-wrap:wrap}
+.color-swatch{width:18px;height:18px;border-radius:3px;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.color-swatch.sel{border-color:#fff}
+
+/* Scrollbar styling */
+.sidebar::-webkit-scrollbar, .results-summary::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-track, .results-summary::-webkit-scrollbar-track{background:var(--bg2)}
+.sidebar::-webkit-scrollbar-thumb, .results-summary::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">STRUCT<span>CALC</span></div>
+  <div class="sep"></div>
+  <div class="tool-group" id="toolGroup">
+    <button class="tool-btn active" data-tool="node" title="Add Node">
+      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="currentColor"/></svg> Node
+    </button>
+    <button class="tool-btn" data-tool="beam" title="Add Member">
+      <svg viewBox="0 0 16 16"><line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Member
+    </button>
+    <button class="tool-btn" data-tool="pin" title="Pin Support">
+      <svg viewBox="0 0 16 16"><polygon points="8,2 14,12 2,12" fill="currentColor"/></svg> Pin
+    </button>
+    <button class="tool-btn" data-tool="roller" title="Roller Support">
+      <svg viewBox="0 0 16 16"><polygon points="8,3 13,11 3,11" fill="currentColor"/><circle cx="8" cy="13" r="2" fill="currentColor"/></svg> Roller
+    </button>
+    <button class="tool-btn" data-tool="fixed" title="Fixed Support">
+      <svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" fill="currentColor" rx="1"/></svg> Fixed
+    </button>
+    <div class="sep"></div>
+    <button class="tool-btn" data-tool="pointLoad" title="Point Load">
+      <svg viewBox="0 0 16 16"><line x1="8" y1="2" x2="8" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><polygon points="8,14 5,10 11,10" fill="currentColor"/></svg> Point Load
+    </button>
+    <button class="tool-btn" data-tool="distLoad" title="Distributed Load">
+      <svg viewBox="0 0 16 16"><line x1="2" y1="6" x2="14" y2="6" stroke="currentColor" stroke-width="1.5"/><line x1="4" y1="6" x2="4" y2="12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="8" y1="6" x2="8" y2="12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="12" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><polygon points="4,14 2,10 6,10" fill="currentColor"/><polygon points="8,14 6,10 10,10" fill="currentColor"/><polygon points="12,14 10,10 14,10" fill="currentColor"/></svg> Dist. Load
+    </button>
+    <button class="tool-btn" data-tool="moment" title="Applied Moment">
+      <svg viewBox="0 0 16 16"><path d="M8 2a6 6 0 0 1 0 12" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><polygon points="8,2 5,5 11,5" fill="currentColor"/></svg> Moment
+    </button>
+    <div class="sep"></div>
+    <button class="tool-btn" data-tool="delete" title="Delete Element">
+      <svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Delete
+    </button>
+  </div>
+  <div class="spacer"></div>
+  <button class="tool-btn" onclick="loadExample('simpleBeam')" style="color:var(--accent4);border-color:var(--accent4)">Simple Beam</button>
+  <button class="tool-btn" onclick="loadExample('frame')" style="color:var(--accent2);border-color:var(--accent2)">Portal Frame</button>
+  <button class="tool-btn" onclick="clearAll()" style="color:var(--danger);border-color:var(--danger)">Clear</button>
+  <button class="btn-solve" onclick="solve()">▶ Analyze</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Unit System</div>
+      <select class="prop-input" id="unitSelect" style="width:100%" onchange="changeUnit()">
+        <option value="metric">Metric (kN, m)</option>
+        <option value="imperial">US Imperial (kip, ft)</option>
+      </select>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Section Properties</div>
+      <div class="prop-row"><span class="prop-label">E (<span id="lblE">GPa</span>)</span><input class="prop-input" id="propE" value="200" type="number" min="1"></div>
+      <div class="prop-row"><span class="prop-label">I (<span id="lblI">cm⁴</span>)</span><input class="prop-input" id="propI" value="8000" type="number" min="1"></div>
+      <div class="prop-row"><span class="prop-label">A (<span id="lblA">cm²</span>)</span><input class="prop-input" id="propA" value="100" type="number" min="1"></div>
+      <div class="prop-row"><span class="prop-label">Grid (<span id="lblGrid">m</span>)</span><input class="prop-input" id="gridSize" value="1" type="number" min="0.5" max="5" step="0.5" onchange="updateGrid()"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Member Color</div>
+      <div class="color-pick" id="colorPick">
+        <div class="color-swatch sel" data-color="#4f8ef7" style="background:#4f8ef7" title="Blue"></div>
+        <div class="color-swatch" data-color="#10b981" style="background:#10b981" title="Green"></div>
+        <div class="color-swatch" data-color="#f59e0b" style="background:#f59e0b" title="Amber"></div>
+        <div class="color-swatch" data-color="#ef4444" style="background:#ef4444" title="Red"></div>
+        <div class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></div>
+        <div class="color-swatch" data-color="#ec4899" style="background:#ec4899" title="Pink"></div>
+        <div class="color-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></div>
+        <div class="color-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Load Settings</div>
+      <div class="prop-row"><span class="prop-label">Magnitude</span><input class="prop-input" id="loadMag" value="10" type="number"></div>
+      <div class="prop-row"><span class="prop-label">Direction</span>
+        <select class="prop-input" id="loadDir">
+          <option value="down">↓ Down</option>
+          <option value="up">↑ Up</option>
+          <option value="left">← Left</option>
+          <option value="right">→ Right</option>
+        </select>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Nodes <span id="nodeCount" style="color:var(--accent);font-family:'JetBrains Mono',monospace">0</span></div>
+      <div class="support-list" id="nodeList"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Members <span id="memberCount" style="color:var(--accent2);font-family:'JetBrains Mono',monospace">0</span></div>
+      <div class="support-list" id="memberList"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Loads <span id="loadCount" style="color:var(--accent4);font-family:'JetBrains Mono',monospace">0</span></div>
+      <div class="load-list" id="loadList"></div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="structCanvas"></canvas>
+      <div class="canvas-hint" id="canvasHint">Click to place node | Scroll to zoom | Alt+Drag to pan</div>
+    </div>
+
+    <div class="results-panel">
+      <div class="results-tabs">
+        <div class="rtab active" data-tab="bmd">Bending Moment (BMD)</div>
+        <div class="rtab" data-tab="sfd">Shear Force (SFD)</div>
+        <div class="rtab" data-tab="afd">Axial Force (AFD)</div>
+        <div class="rtab" data-tab="reactions">Reactions</div>
+      </div>
+      <div class="results-content">
+        <div class="diagram-wrap">
+          <canvas class="diagram-canvas" id="diagramCanvas"></canvas>
+        </div>
+        <div class="results-summary" id="resultsSummary">
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="info-bar">
+  <div class="info-item"><div class="info-dot" style="background:var(--accent)"></div><span>Nodes: <span class="node-count" id="infoNodes">0</span></span></div>
+  <div class="info-item"><div class="info-dot" style="background:var(--accent2)"></div><span>Members: <span class="node-count" id="infoMembers">0</span></span></div>
+  <div class="info-item"><div class="info-dot" style="background:var(--accent4)"></div><span>Loads: <span class="node-count" id="infoLoads">0</span></span></div>
+  <div class="info-item" style="margin-left:auto"><span id="statusMsg" style="color:var(--accent3)">Ready — load an example or start drawing</span></div>
+</div>
+
+<script>
+// ============================================================
+//  STRUCTCALC — 2D Frame Structural Analysis
+//  Engine: Direct Stiffness Method (DSM)
+//  DOF: 3 per node (u, v, theta)
+// ============================================================
+
+// ---- ระบบหน่วย (Unit System) ----
+const UNIT_SYS = {
+  metric: {
+    l: 'm', f: 'kN', m: 'kNm', e: 'GPa', i: 'cm⁴', a: 'cm²',
+    toBase: { l: 1, f: 1000, m: 1000, e: 1e9, i: 1e-8, a: 1e-4 } // แปลงเป็น N, m
+  },
+  imperial: {
+    l: 'ft', f: 'kip', m: 'kip-ft', e: 'ksi', i: 'in⁴', a: 'in²',
+    toBase: { l: 0.3048, f: 4448.22, m: 1355.818, e: 6894757.29, i: 4.162314e-7, a: 0.00064516 }
+  }
+};
+let curUnit = 'metric';
+
+const canvas = document.getElementById('structCanvas');
+const ctx = canvas.getContext('2d');
+const dCanvas = document.getElementById('diagramCanvas');
+const dCtx = dCanvas.getContext('2d');
+const wrap = document.getElementById('canvasWrap');
+
+// State
+let nodes = [], members = [], loads = [], supports = [];
+let currentTool = 'node', selectedColor = '#4f8ef7';
+let panX = 0, panY = 0, scale = 60;
+let isPanning = false, panStart = { x: 0, y: 0 };
+let beamStart = null;
+let activeTab = 'bmd';
+let results = null;
+let gridMeter = 1;
+let hoverNode = null, hoverMember = null;
+
+// ---- Change Units ----
+function changeUnit() {
+  const newUnit = document.getElementById('unitSelect').value;
+  const oldBaseL = UNIT_SYS[curUnit].toBase.l;
+  const newBaseL = UNIT_SYS[newUnit].toBase.l;
+  
+  // Scale coordinates
+  const convertRatio = oldBaseL / newBaseL;
+  nodes.forEach(n => { n.x *= convertRatio; n.y *= convertRatio; });
+  gridMeter *= convertRatio;
+  document.getElementById('gridSize').value = gridMeter.toFixed(1);
+
+  curUnit = newUnit;
+  const u = UNIT_SYS[curUnit];
+
+  // Update UI Labels
+  document.getElementById('lblE').textContent = u.e;
+  document.getElementById('lblI').textContent = u.i;
+  document.getElementById('lblA').textContent = u.a;
+  document.getElementById('lblGrid').textContent = u.l;
+
+  updateUI(); draw();
+  if (results) solve();
+}
+
+// ---- Resize ----
+function resize() {
+  canvas.width = wrap.clientWidth; canvas.height = wrap.clientHeight;
+  dCanvas.width = dCanvas.parentElement.clientWidth; dCanvas.height = dCanvas.parentElement.clientHeight;
+  draw(); drawDiagrams();
+}
+new ResizeObserver(resize).observe(wrap);
+new ResizeObserver(() => {
+  dCanvas.width = dCanvas.parentElement.clientWidth; dCanvas.height = dCanvas.parentElement.clientHeight;
+  drawDiagrams();
+}).observe(dCanvas.parentElement);
+
+// ---- Grid ----
+function updateGrid() {
+  gridMeter = parseFloat(document.getElementById('gridSize').value) || 1;
+  draw();
+}
+
+// ---- Coordinate transforms ----
+function toScreen(wx, wy) { return { x: wx * scale + panX, y: -wy * scale + panY }; }
+function toWorld(sx, sy)   { return { x: (sx - panX) / scale, y: -(sy - panY) / scale }; }
+function snapToGrid(v)     { return Math.round(v / gridMeter) * gridMeter; }
+
+// ---- Tool buttons ----
+document.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
+  b.addEventListener('click', () => {
+    currentTool = b.dataset.tool;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); beamStart = null; updateHint(); draw();
+  });
+});
+
+// ---- Color swatches ----
+document.querySelectorAll('.color-swatch').forEach(s => {
+  s.addEventListener('click', () => {
+    document.querySelectorAll('.color-swatch').forEach(x => x.classList.remove('sel'));
+    s.classList.add('sel'); selectedColor = s.dataset.color;
+  });
+});
+
+// ---- Result tabs ----
+document.querySelectorAll('.rtab').forEach(t => {
+  t.addEventListener('click', () => {
+    activeTab = t.dataset.tab;
+    document.querySelectorAll('.rtab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active'); drawDiagrams();
+  });
+});
+
+function updateHint() {
+  const hints = {
+    node:      'Click canvas to place a node (snaps to grid)',
+    beam:      'Click first node, then second node to create a member',
+    pin:       'Click a node to assign pin support (Fx, Fy)',
+    roller:    'Click a node to assign roller support (Fy only)',
+    fixed:     'Click a node to assign fixed support (Fx, Fy, Mz)',
+    pointLoad: 'Click a node to apply a point load',
+    distLoad:  'Click a member to apply a distributed load',
+    moment:    'Click a node to apply an external moment',
+    delete:    'Click a node or member to delete it'
+  };
+  document.getElementById('canvasHint').textContent = hints[currentTool] || '';
+}
+
+// ---- Mouse events ----
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (isPanning) {
+    panX += mx - panStart.x; panY += my - panStart.y;
+    panStart = { x: mx, y: my }; draw(); return;
+  }
+  hoverNode = findNearestNode(mx, my, 15);
+  hoverMember = hoverNode ? null : findNearestMember(mx, my, 10);
+  draw();
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1 || e.altKey) {
+    isPanning = true;
+    const r = canvas.getBoundingClientRect();
+    panStart = { x: e.clientX - r.left, y: e.clientY - r.top }; return;
+  }
+  const r = canvas.getBoundingClientRect();
+  handleClick(e.clientX - r.left, e.clientY - r.top);
+});
+
+canvas.addEventListener('mouseup', () => isPanning = false);
+canvas.addEventListener('mouseleave', () => { isPanning = false; hoverNode = null; hoverMember = null; draw(); });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const wBefore = toWorld(mx, my);
+  scale *= e.deltaY < 0 ? 1.12 : 0.89;
+  scale = Math.max(20, Math.min(200, scale));
+  const wAfter = toWorld(mx, my);
+  panX += (wAfter.x - wBefore.x) * scale; panY -= (wAfter.y - wBefore.y) * scale;
+  draw();
+}, { passive: false });
+
+// ---- Helpers ----
+function findNearestNode(sx, sy, thresh) {
+  let best = null, bd = Infinity;
+  nodes.forEach(n => {
+    const s = toScreen(n.x, n.y); const d = Math.hypot(s.x - sx, s.y - sy);
+    if (d < thresh && d < bd) { bd = d; best = n; }
+  }); return best;
+}
+
+function findNearestMember(sx, sy, thresh) {
+  let best = null, bd = Infinity;
+  members.forEach(m => {
+    const a = toScreen(nodes[m.i].x, nodes[m.i].y), b = toScreen(nodes[m.j].x, nodes[m.j].y);
+    const d = distPtSeg(sx, sy, a.x, a.y, b.x, b.y);
+    if (d < thresh && d < bd) { bd = d; best = m; }
+  }); return best;
+}
+
+function distPtSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  if (dx === 0 && dy === 0) return Math.hypot(px - ax, py - ay);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+// ---- Click handler ----
+function handleClick(mx, my) {
+  const w = toWorld(mx, my); const wx = snapToGrid(w.x), wy = snapToGrid(w.y);
+
+  if (currentTool === 'node') {
+    if (!nodes.find(n => Math.abs(n.x - wx) < 0.01 && Math.abs(n.y - wy) < 0.01)) nodes.push({ x: wx, y: wy, id: nodes.length });
+    updateUI();
+  } else if (currentTool === 'beam') {
+    const n = findNearestNode(mx, my, 20);
+    if (n) {
+      if (!beamStart) { beamStart = n; } 
+      else if (beamStart !== n) {
+        if (!members.find(m => (m.i === beamStart.id && m.j === n.id) || (m.i === n.id && m.j === beamStart.id))) {
+          members.push({
+            i: beamStart.id, j: n.id, color: selectedColor,
+            E: parseFloat(document.getElementById('propE').value) || 200,
+            I: parseFloat(document.getElementById('propI').value) || 8000,
+            A: parseFloat(document.getElementById('propA').value) || 100
+          });
+        }
+        beamStart = null; updateUI();
+      }
+    }
+  } else if (['pin', 'roller', 'fixed'].includes(currentTool)) {
+    const n = findNearestNode(mx, my, 20);
+    if (n) { supports = supports.filter(s => s.nodeId !== n.id); supports.push({ nodeId: n.id, type: currentTool }); updateUI(); }
+  } else if (currentTool === 'pointLoad') {
+    const n = findNearestNode(mx, my, 20);
+    if (n) { loads.push({ type: 'point', nodeId: n.id, magnitude: parseFloat(document.getElementById('loadMag').value) || 10, direction: document.getElementById('loadDir').value }); updateUI(); }
+  } else if (currentTool === 'distLoad') {
+    const m = findNearestMember(mx, my, 15);
+    if (m) { loads.push({ type: 'dist', memberId: members.indexOf(m), magnitude: parseFloat(document.getElementById('loadMag').value) || 10, direction: document.getElementById('loadDir').value }); updateUI(); }
+  } else if (currentTool === 'moment') {
+    const n = findNearestNode(mx, my, 20);
+    if (n) { loads.push({ type: 'moment', nodeId: n.id, magnitude: parseFloat(document.getElementById('loadMag').value) || 10 }); updateUI(); }
+  } else if (currentTool === 'delete') {
+    if (hoverNode) {
+      const id = hoverNode.id; nodes = nodes.filter(n => n.id !== id);
+      members = members.filter(m => m.i !== id && m.j !== id);
+      supports = supports.filter(s => s.nodeId !== id); loads = loads.filter(l => l.nodeId !== id);
+      nodes.forEach((n, i) => n.id = i); hoverNode = null; updateUI();
+    } else if (hoverMember) {
+      const idx = members.indexOf(hoverMember); members.splice(idx, 1);
+      loads = loads.filter(l => l.memberId !== idx); hoverMember = null; updateUI();
+    }
+  } draw();
+}
+
+// ---- UI update ----
+function updateUI() {
+  const u = UNIT_SYS[curUnit];
+  document.getElementById('nodeCount').textContent = nodes.length;
+  document.getElementById('memberCount').textContent = members.length;
+  document.getElementById('loadCount').textContent = loads.length;
+  document.getElementById('infoNodes').textContent = nodes.length;
+  document.getElementById('infoMembers').textContent = members.length;
+  document.getElementById('infoLoads').textContent = loads.length;
+
+  const nl = document.getElementById('nodeList');
+  nl.innerHTML = nodes.map((n, i) => {
+    const sup = supports.find(s => s.nodeId === n.id);
+    const supColor = sup ? { pin: '#4f8ef7', roller: '#10b981', fixed: '#f59e0b' }[sup.type] : '';
+    const supLabel = sup ? `<span style="color:${supColor};font-weight:600">${sup.type[0].toUpperCase()}</span>` : '';
+    return `<div class="support-item">${supLabel}<span style="color:var(--muted)">N${i + 1}</span><span>(${n.x.toFixed(1)},${n.y.toFixed(1)})</span><span class="support-del" onclick="deleteNode(${i})">×</span></div>`;
+  }).join('');
+
+  const ml = document.getElementById('memberList');
+  ml.innerHTML = members.map((m, i) => `<div class="support-item"><span style="color:${m.color}">■</span><span>M${i + 1}: N${m.i + 1}→N${m.j + 1}</span><span class="support-del" onclick="deleteMember(${i})">×</span></div>`).join('');
+
+  const ll = document.getElementById('loadList');
+  ll.innerHTML = loads.map((l, i) => {
+    let desc = '';
+    if (l.type === 'point') desc = `${l.magnitude}${u.f} ${l.direction} @N${l.nodeId + 1}`;
+    else if (l.type === 'dist') desc = `${l.magnitude}${u.f}/${u.l} ${l.direction} @M${l.memberId + 1}`;
+    else desc = `M=${l.magnitude}${u.m} @N${l.nodeId + 1}`;
+    return `<div class="load-item"><span>${desc}</span><span class="load-del" onclick="deleteLoad(${i})">×</span></div>`;
+  }).join('');
+}
+
+function deleteNode(i)   { nodes.splice(i, 1); nodes.forEach((n, j) => n.id = j); updateUI(); draw(); }
+function deleteMember(i) { members.splice(i, 1); updateUI(); draw(); }
+function deleteLoad(i)   { loads.splice(i, 1); updateUI(); draw(); }
+
+// ============================================================
+//  DRAW ENGINE
+// ============================================================
+function draw() {
+  const w = canvas.width, h = canvas.height;
+  const u = UNIT_SYS[curUnit];
+  ctx.clearRect(0, 0, w, h);
+
+  // ---- Grid ----
+  ctx.strokeStyle = '#1a1f30'; ctx.lineWidth = 0.5;
+  const gsc = scale * gridMeter;
+  const ox = ((panX % gsc) + gsc) % gsc, oy = ((panY % gsc) + gsc) % gsc;
+  for (let x = ox; x < w; x += gsc) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = oy; y < h; y += gsc) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  // ---- Origin axes ----
+  const o = toScreen(0, 0);
+  ctx.strokeStyle = '#2a3148'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, o.y); ctx.lineTo(w, o.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(o.x, 0); ctx.lineTo(o.x, h); ctx.stroke();
+
+  // ---- Members ----
+  members.forEach((m, mi) => {
+    const a = toScreen(nodes[m.i].x, nodes[m.i].y), b = toScreen(nodes[m.j].x, nodes[m.j].y);
+    const isHov = hoverMember === m;
+    ctx.strokeStyle = isHov ? '#ffffff' : m.color; ctx.lineWidth = isHov ? 3.5 : 2.5;
+    ctx.shadowColor = isHov ? m.color : 'transparent'; ctx.shadowBlur = isHov ? 8 : 0;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.shadowBlur = 0;
+
+    // Length label
+    const dx = nodes[m.j].x - nodes[m.i].x, dy = nodes[m.j].y - nodes[m.i].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const mx2 = (a.x + b.x) / 2, my2 = (a.y + b.y) / 2, ang = Math.atan2(b.y - a.y, b.x - a.x);
+    ctx.save(); ctx.translate(mx2, my2); ctx.rotate(ang);
+    ctx.fillStyle = 'rgba(100,116,139,.85)'; ctx.font = '10px JetBrains Mono,monospace';
+    ctx.textAlign = 'center'; ctx.fillText(len.toFixed(2) + u.l, 0, -7); ctx.restore();
+
+    // Member index label
+    ctx.fillStyle = m.color + '99'; ctx.font = 'bold 10px Sora,sans-serif'; ctx.textAlign = 'center';
+    const perp = { x: -(b.y - a.y) / Math.hypot(b.x - a.x, b.y - a.y) * 12, y: (b.x - a.x) / Math.hypot(b.x - a.x, b.y - a.y) * 12 };
+    ctx.fillText('M' + (mi + 1), mx2 + perp.x, my2 + perp.y);
+
+    // Distributed loads
+    loads.filter(l => l.type === 'dist' && l.memberId === mi).forEach(l => {
+      const n = 8;
+      for (let t = 0; t <= n; t++) {
+        const tx = a.x + (b.x - a.x) * t / n, ty = a.y + (b.y - a.y) * t / n;
+        let ex = tx, ey = ty, arLen = 22;
+        if (l.direction === 'down')  { ey -= arLen; } if (l.direction === 'up')    { ey += arLen; }
+        if (l.direction === 'left')  { ex += arLen; } if (l.direction === 'right') { ex -= arLen; }
+        ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
+        drawArrowHead(ctx, ex, ey, tx, ty, '#f59e0b', 5);
+      }
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; ctx.beginPath();
+      for (let t = 0; t <= n; t++) {
+        const tx2 = a.x + (b.x - a.x) * t / n, ty2 = a.y + (b.y - a.y) * t / n;
+        let ex = tx2, ey = ty2;
+        if (l.direction === 'down') ey -= 22; if (l.direction === 'up') ey += 22;
+        if (l.direction === 'left') ex += 22; if (l.direction === 'right') ex -= 22;
+        t === 0 ? ctx.moveTo(ex, ey) : ctx.lineTo(ex, ey);
+      } ctx.stroke();
+    });
+  });
+
+  if (beamStart) {
+    const s = toScreen(beamStart.x, beamStart.y);
+    ctx.strokeStyle = '#4f8ef7'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(s.x, s.y, 14, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // ---- Nodes ----
+  nodes.forEach((n, i) => {
+    const s = toScreen(n.x, n.y), isHov = hoverNode === n, sup = supports.find(x => x.nodeId === n.id);
+    if (sup) {
+      ctx.save();
+      if (sup.type === 'pin') {
+        ctx.fillStyle = '#4f8ef7'; ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - 11, s.y + 18); ctx.lineTo(s.x + 11, s.y + 18); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#4f8ef7'; ctx.lineWidth = 1.5; for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(s.x - 13 + k * 5, s.y + 20); ctx.lineTo(s.x - 9 + k * 5, s.y + 25); ctx.stroke(); }
+      } else if (sup.type === 'roller') {
+        ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - 11, s.y + 18); ctx.lineTo(s.x + 11, s.y + 18); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.arc(s.x - 6, s.y + 21, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(s.x + 6, s.y + 21, 3.5, 0, Math.PI * 2); ctx.fill();
+      } else if (sup.type === 'fixed') {
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(s.x - 3, s.y - 18, 6, 36);
+        for (let k = -5; k <= 5; k++) { ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(s.x - 3, s.y + k * 3.5); ctx.lineTo(s.x - 12, s.y + k * 3.5 + 7); ctx.stroke(); }
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(s.x - 12, s.y - 18, 9, 36);
+      } ctx.restore();
+    }
+    const nodeColor = sup ? { pin: '#4f8ef7', roller: '#10b981', fixed: '#f59e0b' }[sup.type] : '#4f8ef7';
+    ctx.fillStyle = isHov ? '#ffffff' : nodeColor; ctx.shadowColor = isHov ? nodeColor : 'transparent'; ctx.shadowBlur = isHov ? 10 : 0;
+    ctx.beginPath(); ctx.arc(s.x, s.y, isHov ? 6 : 4.5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#0a0d16'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(148,163,184,.85)'; ctx.font = '10px JetBrains Mono,monospace'; ctx.textAlign = 'center'; ctx.fillText('N' + (i + 1), s.x, s.y - 12);
+  });
+
+  // ---- Point loads ----
+  loads.filter(l => l.type === 'point').forEach(l => {
+    const n = nodes[l.nodeId]; if (!n) return;
+    const s = toScreen(n.x, n.y), dx = { left: -1, right: 1 }[l.direction] || 0, dy = { down: 1, up: -1 }[l.direction] || 0;
+    const ex = s.x + dx * 38, ey = s.y + dy * 38;
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(s.x, s.y); ctx.stroke();
+    drawArrowHead(ctx, ex, ey, s.x, s.y, '#ef4444', 9);
+    ctx.fillStyle = '#ef4444'; ctx.font = 'bold 10px Sora,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(l.magnitude + u.f, ex + dy * 18, ey - dx * 10);
+  });
+
+  // ---- Moment loads ----
+  loads.filter(l => l.type === 'moment').forEach(l => {
+    const n = nodes[l.nodeId]; if (!n) return;
+    const s = toScreen(n.x, n.y); ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0.1, Math.PI * 1.7); ctx.stroke();
+    const ex = s.x + 16 * Math.cos(Math.PI * 1.7), ey = s.y + 16 * Math.sin(Math.PI * 1.7);
+    drawArrowHead(ctx, ex, ey, ex + 6, ey - 2, '#8b5cf6', 6);
+    ctx.fillStyle = '#8b5cf6'; ctx.font = 'bold 10px Sora,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(l.magnitude + u.m, s.x, s.y - 24);
+  });
+}
+
+function drawArrowHead(ctx, fx, fy, tx, ty, color, size) {
+  const ang = Math.atan2(ty - fy, tx - fx); ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(tx, ty);
+  ctx.lineTo(tx - size * Math.cos(ang - 0.42), ty - size * Math.sin(ang - 0.42));
+  ctx.lineTo(tx - size * Math.cos(ang + 0.42), ty - size * Math.sin(ang + 0.42)); ctx.closePath(); ctx.fill();
+}
+
+// ============================================================
+//  STRUCTURAL ANALYSIS ENGINE — Direct Stiffness Method
+// ============================================================
+function solve() {
+  if (nodes.length < 2 || members.length < 1) { setStatus('Need at least 2 nodes and 1 member', '#ef4444'); return; }
+  if (supports.length < 1) { setStatus('Add at least one support', '#ef4444'); return; }
+
+  const nn = nodes.length; const ndof = 3 * nn;
+  const K = Array.from({ length: ndof }, () => new Array(ndof).fill(0)), F = new Array(ndof).fill(0);
+  const b = UNIT_SYS[curUnit].toBase; // ใช้หน่วยฐาน
+
+  members.forEach((m, mi) => {
+    const ni = m.i, nj = m.j, xi = nodes[ni].x * b.l, yi = nodes[ni].y * b.l, xj = nodes[nj].x * b.l, yj = nodes[nj].y * b.l;
+    const L = Math.hypot(xj - xi, yj - yi); if (L < 1e-9) return;
+    const E = m.E * b.e, I = m.I * b.i, A = m.A * b.a, c = (xj - xi) / L, s = (yj - yi) / L, EI = E * I, EA = E * A;
+
+    const kl = [
+      [EA/L, 0, 0, -EA/L, 0, 0], [0, 12*EI/L**3, 6*EI/L**2, 0, -12*EI/L**3, 6*EI/L**2], [0, 6*EI/L**2, 4*EI/L, 0, -6*EI/L**2, 2*EI/L],
+      [-EA/L, 0, 0, EA/L, 0, 0], [0, -12*EI/L**3, -6*EI/L**2, 0, 12*EI/L**3, -6*EI/L**2], [0, 6*EI/L**2, 2*EI/L, 0, -6*EI/L**2, 4*EI/L]
+    ];
+    const T = [[ c, s, 0, 0, 0, 0], [-s, c, 0, 0, 0, 0], [ 0, 0, 1, 0, 0, 0], [ 0, 0, 0, c, s, 0], [ 0, 0, 0,-s, c, 0], [ 0, 0, 0, 0, 0, 1]];
+    const kg = matMul(matMul(transpose(T), kl), T);
+    const dofs = [ni*3, ni*3+1, ni*3+2, nj*3, nj*3+1, nj*3+2];
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) K[dofs[i]][dofs[j]] += kg[i][j];
+  });
+
+  loads.forEach(l => {
+    if (l.type === 'point') {
+      const fmap = { down: -1, up: 1, left: -1, right: 1 };
+      if (['down', 'up'].includes(l.direction)) F[l.nodeId*3+1] += l.magnitude * b.f * fmap[l.direction]; else F[l.nodeId*3] += l.magnitude * b.f * fmap[l.direction];
+    } else if (l.type === 'moment') {
+      F[l.nodeId*3+2] += l.magnitude * b.m;
+    } else if (l.type === 'dist') {
+      const m = members[l.memberId]; if (!m) return;
+      const ni = m.i, nj = m.j, xi = nodes[ni].x * b.l, yi = nodes[ni].y * b.l, xj = nodes[nj].x * b.l, yj = nodes[nj].y * b.l;
+      const L = Math.hypot(xj - xi, yj - yi), c = (xj - xi) / L, s = (yj - yi) / L;
+      const w = l.magnitude * (b.f / b.l), fv = { down: -1, up: 1 }[l.direction] || -1; // force per length in base unit
+      const fyA = fv * w * L / 2, mA = fv * w * L * L / 12, fyB = fv * w * L / 2, mB = -fv * w * L * L / 12;
+      F[ni*3] += -s * fyA; F[ni*3+1] += c * fyA; F[ni*3+2] += mA; F[nj*3] += -s * fyB; F[nj*3+1] += c * fyB; F[nj*3+2] += mB;
+    }
+  });
+
+  const BIG = 1e15;
+  supports.forEach(sup => {
+    const ni = sup.nodeId;
+    if (sup.type === 'pin' || sup.type === 'fixed') { K[ni*3][ni*3] += BIG; K[ni*3+1][ni*3+1] += BIG; }
+    if (sup.type === 'roller') K[ni*3+1][ni*3+1] += BIG;
+    if (sup.type === 'fixed')  K[ni*3+2][ni*3+2] += BIG;
+  });
+
+  const U = gaussElim(K.map((r, i) => [...r, F[i]]));
+  if (!U) { setStatus('Singular system — check support conditions', '#ef4444'); return; }
+
+  const memberResults = members.map((m, mi) => {
+    const ni = m.i, nj = m.j, xi = nodes[ni].x * b.l, yi = nodes[ni].y * b.l, xj = nodes[nj].x * b.l, yj = nodes[nj].y * b.l;
+    const L = Math.hypot(xj - xi, yj - yi), E = m.E * b.e, I = m.I * b.i, A = m.A * b.a, c = (xj - xi) / L, s2 = (yj - yi) / L, EI = E * I, EA = E * A;
+    const dg = [U[ni*3], U[ni*3+1], U[ni*3+2], U[nj*3], U[nj*3+1], U[nj*3+2]];
+    const dl = [c*dg[0]+s2*dg[1], -s2*dg[0]+c*dg[1], dg[2], c*dg[3]+s2*dg[4], -s2*dg[3]+c*dg[4], dg[5]];
+    const kl = [
+      [EA/L, 0, 0, -EA/L, 0, 0], [0, 12*EI/L**3, 6*EI/L**2, 0, -12*EI/L**3, 6*EI/L**2], [0, 6*EI/L**2, 4*EI/L, 0, -6*EI/L**2, 2*EI/L],
+      [-EA/L, 0, 0, EA/L, 0, 0], [0, -12*EI/L**3, -6*EI/L**2, 0, 12*EI/L**3, -6*EI/L**2], [0, 6*EI/L**2, 2*EI/L, 0, -6*EI/L**2, 4*EI/L]
+    ];
+    const f = matVec(kl, dl);
+    let wDist = 0, wDir = 0;
+    loads.filter(l => l.type === 'dist' && l.memberId === mi).forEach(l => { wDist += l.magnitude * (b.f / b.l); wDir = ({ down: -1, up: 1 }[l.direction] || -1); });
+
+    const nPts = 41, xi2 = [], sfd = [], bmd = [], afd = [];
+    for (let k = 0; k < nPts; k++) {
+      const x = L * k / (nPts - 1); xi2.push(x / b.l); // Convert length back for drawing
+      const V0 = -f[1], M0 = f[2], N0 = f[0];
+      sfd.push((V0 + wDist * wDir * x) / b.f);
+      bmd.push((M0 + V0 * x + wDist * wDir * x * x / 2) / b.m);
+      afd.push(N0 / b.f);
+    }
+    return { memberId: mi, xi: xi2, sfd, bmd, afd, L: L / b.l }; // Convert L back for drawing
+  });
+
+  const reactions = supports.map(s => {
+    const ni = s.nodeId;
+    const Rx = s.type === 'pin' || s.type === 'fixed' ? (BIG * U[ni*3]) / b.f : 0;
+    const Ry = (s.type !== 'free') ? (BIG * U[ni*3+1]) / b.f : 0;
+    const Mz = s.type === 'fixed'  ? (BIG * U[ni*3+2]) / b.m : 0;
+    return { nodeId: ni, type: s.type, Fx: -Rx, Fy: -Ry, Mz: -Mz };
+  });
+
+  results = { memberResults, reactions, U }; drawDiagrams();
+  setStatus(`✓ Analysis complete — ${members.length} member(s) | ${supports.length} support(s)`, '#10b981');
+}
+
+function setStatus(msg, color) { const el = document.getElementById('statusMsg'); el.style.color = color; el.textContent = msg; }
+function transpose(m) { return m[0].map((_, i) => m.map(r => r[i])); }
+function matMul(A, B) { return A.map(r => B[0].map((_, j) => r.reduce((s, v, k) => s + v * B[k][j], 0))); }
+function matVec(A, b) { return A.map(r => r.reduce((s, v, i) => s + v * b[i], 0)); }
+function gaussElim(M) {
+  const n = M.length;
+  for (let col = 0; col < n; col++) {
+    let max = col; for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[max][col])) max = r;
+    [M[col], M[max]] = [M[max], M[col]]; if (Math.abs(M[col][col]) < 1e-14) continue;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue; const f = M[r][col] / M[col][col];
+      for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c];
+    }
+  } return M.map((r, i) => Math.abs(M[i][i]) > 1e-30 ? r[n] / M[i][i] : 0);
+}
+
+// ============================================================
+//  DIAGRAM DRAWING
+// ============================================================
+function drawDiagrams() {
+  const w = dCanvas.width, h = dCanvas.height, u = UNIT_SYS[curUnit];
+  const summaryDiv = document.getElementById('resultsSummary');
+  dCtx.clearRect(0, 0, w, h);
+  
+  if (!results) {
+    summaryDiv.style.display = 'none';
+    dCtx.fillStyle = '#0a0d16'; dCtx.fillRect(0, 0, w, h);
+    dCtx.fillStyle = '#2a3148'; dCtx.font = '13px Sora,sans-serif'; dCtx.textAlign = 'center'; dCtx.fillText('Run analysis to see diagrams', w / 2, h / 2); return;
+  }
+
+  dCtx.fillStyle = '#0a0d16'; dCtx.fillRect(0, 0, w, h);
+  if (activeTab === 'reactions') { 
+    summaryDiv.style.display = 'none';
+    drawReactions(w, h, u); 
+    return; 
+  }
+
+  // Show summary panel and calculate min/max
+  summaryDiv.style.display = 'flex';
+  const allY = [];
+  results.memberResults.forEach(mr => { const data = activeTab === 'bmd' ? mr.bmd : activeTab === 'sfd' ? mr.sfd : mr.afd; data.forEach(v => allY.push(v)); });
+  
+  const absMinY = Math.min(...allY);
+  const absMaxY = Math.max(...allY);
+  const absoluteMax = Math.max(Math.abs(absMinY), Math.abs(absMaxY));
+  const unitStr = activeTab === 'bmd' ? u.m : u.f;
+
+  summaryDiv.innerHTML = `
+    <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:2px">SUMMARY STATS</div>
+    <div class="sum-box" style="border-left:3px solid var(--accent)">
+      <div class="sum-label">Max (Positive)</div>
+      <div class="sum-val">${absMaxY.toFixed(3)} <span style="font-size:10px;color:var(--muted);font-weight:400">${unitStr}</span></div>
+    </div>
+    <div class="sum-box" style="border-left:3px solid var(--danger)">
+      <div class="sum-label">Min (Negative)</div>
+      <div class="sum-val">${absMinY.toFixed(3)} <span style="font-size:10px;color:var(--muted);font-weight:400">${unitStr}</span></div>
+    </div>
+    <div class="sum-box" style="border-left:3px solid var(--accent4)">
+      <div class="sum-label">Absolute Max</div>
+      <div class="sum-val">${absoluteMax.toFixed(3)} <span style="font-size:10px;color:var(--muted);font-weight:400">${unitStr}</span></div>
+    </div>
+  `;
+
+  // Draw diagram
+  allY.push(0); 
+  const minY = Math.min(...allY), maxY = Math.max(...allY), rangeY = (maxY - minY) || 1;
+  const pad = { l: 52, r: 20, t: 14, b: 28 }, gW = w - pad.l - pad.r, gH = h - pad.t - pad.b;
+  const totalL = results.memberResults.reduce((s, mr) => s + mr.L, 0);
+  const colors = { bmd: '#4f8ef7', sfd: '#10b981', afd: '#f59e0b' }, color = colors[activeTab];
+  const labels = { bmd: `Moment (${u.m})`, sfd: `Shear (${u.f})`, afd: `Axial (${u.f})` };
+
+  for (let i = 0; i <= 4; i++) {
+    const v = minY + rangeY * i / 4, y = h - pad.b - (v - minY) / rangeY * gH;
+    dCtx.strokeStyle = '#1a1f30'; dCtx.lineWidth = 0.5; dCtx.beginPath(); dCtx.moveTo(pad.l, y); dCtx.lineTo(w - pad.r, y); dCtx.stroke();
+    dCtx.fillStyle = '#475569'; dCtx.font = '9px JetBrains Mono,monospace'; dCtx.textAlign = 'right'; dCtx.fillText(v.toFixed(1), pad.l - 4, y + 3);
+  }
+
+  const zeroY = h - pad.b - (0 - minY) / rangeY * gH;
+  dCtx.strokeStyle = '#334155'; dCtx.lineWidth = 1; dCtx.setLineDash([5, 5]);
+  dCtx.beginPath(); dCtx.moveTo(pad.l, zeroY); dCtx.lineTo(w - pad.r, zeroY); dCtx.stroke(); dCtx.setLineDash([]);
+  dCtx.fillStyle = '#475569'; dCtx.font = '9px JetBrains Mono,monospace'; dCtx.textAlign = 'right'; dCtx.fillText('0', pad.l - 4, zeroY + 3);
+
+  dCtx.strokeStyle = '#2a3148'; dCtx.lineWidth = 1; dCtx.beginPath(); dCtx.moveTo(pad.l, pad.t); dCtx.lineTo(pad.l, h - pad.b); dCtx.moveTo(pad.l, h - pad.b); dCtx.lineTo(w - pad.r, h - pad.b); dCtx.stroke();
+
+  let xOffset = 0;
+  results.memberResults.forEach((mr, mi) => {
+    const data = activeTab === 'bmd' ? mr.bmd : activeTab === 'sfd' ? mr.sfd : mr.afd, L = mr.L, xScale = gW / totalL;
+    const pts = data.map((v, k) => ({ x: pad.l + (xOffset + mr.xi[k]) * xScale, y: h - pad.b - (v - minY) / rangeY * gH }));
+    dCtx.beginPath(); dCtx.moveTo(pts[0].x, zeroY); pts.forEach(p => dCtx.lineTo(p.x, p.y)); dCtx.lineTo(pts[pts.length - 1].x, zeroY); dCtx.closePath(); dCtx.fillStyle = color + '25'; dCtx.fill();
+    dCtx.beginPath(); dCtx.moveTo(pts[0].x, pts[0].y); pts.forEach(p => dCtx.lineTo(p.x, p.y)); dCtx.strokeStyle = color; dCtx.lineWidth = 2; dCtx.stroke();
+    if (mi > 0) { dCtx.strokeStyle = '#2a3148'; dCtx.lineWidth = 1; dCtx.setLineDash([3, 3]); dCtx.beginPath(); dCtx.moveTo(pts[0].x, pad.t); dCtx.lineTo(pts[0].x, h - pad.b); dCtx.stroke(); dCtx.setLineDash([]); }
+    [[0, data[0]], [data.length - 1, data[data.length - 1]]].forEach(([k, v]) => {
+      const px = pts[k].x, py = pts[k].y, offY = py < zeroY ? -8 : 14;
+      dCtx.fillStyle = color; dCtx.font = 'bold 9px JetBrains Mono,monospace'; dCtx.textAlign = 'center'; dCtx.fillText(v.toFixed(2), px, py + offY);
+      dCtx.beginPath(); dCtx.arc(px, py, 2.5, 0, Math.PI * 2); dCtx.fillStyle = color; dCtx.fill();
+    });
+    const midX = pad.l + (xOffset + L / 2) * xScale; dCtx.fillStyle = '#475569'; dCtx.font = '9px Sora,sans-serif'; dCtx.textAlign = 'center'; dCtx.fillText('M' + (mi + 1) + ' (' + L.toFixed(1) + u.l + ')', midX, h - 4);
+    xOffset += L;
+  });
+
+  dCtx.save(); dCtx.translate(11, h / 2); dCtx.rotate(-Math.PI / 2); dCtx.fillStyle = '#64748b'; dCtx.font = '10px Sora,sans-serif'; dCtx.textAlign = 'center'; dCtx.fillText(labels[activeTab], 0, 0); dCtx.restore();
+}
+
+function drawReactions(w, h, u) {
+  const rects = results.reactions;
+  const cols = ['Node', 'Type', `Rx (${u.f})`, `Ry (${u.f})`, `Mz (${u.m})`];
+  const colW = w / cols.length;
+
+  dCtx.fillStyle = '#1e2435'; dCtx.fillRect(0, 0, w, 28);
+  cols.forEach((c, i) => { dCtx.fillStyle = '#94a3b8'; dCtx.font = 'bold 11px Sora,sans-serif'; dCtx.textAlign = 'center'; dCtx.fillText(c, (i + 0.5) * colW, 18); });
+  if (!rects.length) { dCtx.fillStyle = '#475569'; dCtx.font = '12px Sora,sans-serif'; dCtx.textAlign = 'center'; dCtx.fillText('No reactions computed', w / 2, h / 2 + 14); return; }
+
+  rects.forEach((r, ri) => {
+    const row = [`N${r.nodeId + 1}`, r.type, r.Fx.toFixed(3), r.Fy.toFixed(3), r.Mz.toFixed(3)];
+    dCtx.fillStyle = ri % 2 === 0 ? '#0f1117' : '#111520'; dCtx.fillRect(0, 28 + ri * 26, w, 26);
+    row.forEach((v, ci) => {
+      const isNum = ci > 1, val = parseFloat(v); let col = '#94a3b8';
+      if (isNum) col = Math.abs(val) < 0.001 ? '#475569' : val > 0 ? '#4f8ef7' : '#ef4444';
+      dCtx.fillStyle = col; dCtx.font = '11px JetBrains Mono,monospace'; dCtx.textAlign = 'center'; dCtx.fillText(v, (ci + 0.5) * colW, 28 + ri * 26 + 17);
+    });
+  });
+}
+
+// ============================================================
+//  EXAMPLE STRUCTURES
+// ============================================================
+function loadExample(type) {
+  clearAll();
+  
+  // Reset unit to Metric for Examples to display correctly
+  if (curUnit !== 'metric') {
+    document.getElementById('unitSelect').value = 'metric';
+    curUnit = 'metric'; changeUnit();
+  }
+
+  if (type === 'simpleBeam') {
+    nodes = [{ x: 0, y: 0, id: 0 }, { x: 3, y: 0, id: 1 }, { x: 6, y: 0, id: 2 }];
+    members = [ { i: 0, j: 1, color: '#4f8ef7', E: 200, I: 8000, A: 100 }, { i: 1, j: 2, color: '#4f8ef7', E: 200, I: 8000, A: 100 } ];
+    supports = [{ nodeId: 0, type: 'pin' }, { nodeId: 2, type: 'roller' }];
+    loads = [{ type: 'point', nodeId: 1, magnitude: 20, direction: 'down' }, { type: 'dist', memberId: 0, magnitude: 5, direction: 'down' }];
+    panX = canvas.width / 2 - 3 * scale; panY = canvas.height * 0.42;
+    setStatus("Simple beam loaded — press ▶ Analyze", '#f59e0b');
+  } else if (type === 'frame') {
+    nodes = [{ x: 0, y: 0, id: 0 }, { x: 0, y: 4, id: 1 }, { x: 6, y: 4, id: 2 }, { x: 6, y: 0, id: 3 }];
+    members = [ { i: 0, j: 1, color: '#10b981', E: 200, I: 8000, A: 100 }, { i: 1, j: 2, color: '#4f8ef7', E: 200, I: 8000, A: 100 }, { i: 2, j: 3, color: '#10b981', E: 200, I: 8000, A: 100 } ];
+    supports = [{ nodeId: 0, type: 'fixed' }, { nodeId: 3, type: 'fixed' }];
+    loads = [{ type: 'dist', memberId: 1, magnitude: 10, direction: 'down' }, { type: 'point', nodeId: 1, magnitude: 15, direction: 'right' }];
+    panX = canvas.width / 2 - 3 * scale; panY = canvas.height * 0.72;
+    setStatus("Portal frame loaded — press ▶ Analyze", '#f59e0b');
+  }
+
+  updateUI(); draw(); results = null; drawDiagrams();
+}
+
+function clearAll() {
+  nodes = []; members = []; supports = []; loads = [];
+  beamStart = null; results = null; hoverNode = null; hoverMember = null;
+  updateUI(); draw(); drawDiagrams();
+  setStatus('Cleared — start drawing or load an example', '#64748b');
+}
+
+// ---- Init ----
+setTimeout(() => { panX = 200; panY = 280; resize(); loadExample('simpleBeam'); }, 100);
+</script>
+</body>
+</html>
