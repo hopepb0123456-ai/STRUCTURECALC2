@@ -109,6 +109,9 @@ select.prop-input{cursor:pointer}
     </button>
   </div>
   <div class="spacer"></div>
+  <button class="tool-btn" onclick="undo()" title="Undo (Ctrl+Z)">
+    <svg viewBox="0 0 16 16"><path d="M4.5 7.5A4.5 4.5 0 1 1 9 12v-2a2.5 2.5 0 1 0-2.5-2.5H9L5 11.5 1 7.5h3.5z" fill="currentColor"/></svg> Undo
+  </button>
   <button class="tool-btn" onclick="loadExample('simpleBeam')" style="color:var(--accent4);border-color:var(--accent4)">Simple Beam</button>
   <button class="tool-btn" onclick="loadExample('frame')" style="color:var(--accent2);border-color:var(--accent2)">Portal Frame</button>
   <button class="tool-btn" onclick="clearAll()" style="color:var(--danger);border-color:var(--danger)">Clear</button>
@@ -238,13 +241,49 @@ let results = null;
 let gridMeter = 1;
 let hoverNode = null, hoverMember = null;
 
+// ---- ระบบ Undo (Undo System) ----
+let undoStack = [];
+const MAX_UNDO = 20; // เก็บย้อนหลังได้สูงสุด 20 ครั้ง
+
+function saveState() {
+  const state = JSON.stringify({ nodes, members, loads, supports });
+  undoStack.push(state);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+function undo() {
+  if (undoStack.length === 0) {
+    setStatus('Nothing to undo', '#64748b');
+    return;
+  }
+  const state = JSON.parse(undoStack.pop());
+  nodes = state.nodes;
+  members = state.members;
+  loads = state.loads;
+  supports = state.supports;
+  beamStart = null;
+  results = null; // ข้อมูลเปลี่ยนแล้ว ผลการวิเคราะห์เก่าต้องลบทิ้ง
+  updateUI();
+  draw();
+  drawDiagrams();
+  setStatus('Undo successful', '#f59e0b');
+}
+
+// ผูกคีย์ลัด Ctrl+Z หรือ Cmd+Z
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    undo();
+  }
+});
+
 // ---- Change Units ----
 function changeUnit() {
+  saveState(); // เก็บ State ก่อนเปลี่ยนหน่วยด้วย เผื่ออยาก Undo
   const newUnit = document.getElementById('unitSelect').value;
   const oldBaseL = UNIT_SYS[curUnit].toBase.l;
   const newBaseL = UNIT_SYS[newUnit].toBase.l;
   
-  // Scale coordinates
   const convertRatio = oldBaseL / newBaseL;
   nodes.forEach(n => { n.x *= convertRatio; n.y *= convertRatio; });
   gridMeter *= convertRatio;
@@ -253,7 +292,6 @@ function changeUnit() {
   curUnit = newUnit;
   const u = UNIT_SYS[curUnit];
 
-  // Update UI Labels
   document.getElementById('lblE').textContent = u.e;
   document.getElementById('lblI').textContent = u.i;
   document.getElementById('lblA').textContent = u.a;
@@ -395,7 +433,10 @@ function handleClick(mx, my) {
   const w = toWorld(mx, my); const wx = snapToGrid(w.x), wy = snapToGrid(w.y);
 
   if (currentTool === 'node') {
-    if (!nodes.find(n => Math.abs(n.x - wx) < 0.01 && Math.abs(n.y - wy) < 0.01)) nodes.push({ x: wx, y: wy, id: nodes.length });
+    if (!nodes.find(n => Math.abs(n.x - wx) < 0.01 && Math.abs(n.y - wy) < 0.01)) {
+      saveState();
+      nodes.push({ x: wx, y: wy, id: nodes.length });
+    }
     updateUI();
   } else if (currentTool === 'beam') {
     const n = findNearestNode(mx, my, 20);
@@ -403,6 +444,7 @@ function handleClick(mx, my) {
       if (!beamStart) { beamStart = n; } 
       else if (beamStart !== n) {
         if (!members.find(m => (m.i === beamStart.id && m.j === n.id) || (m.i === n.id && m.j === beamStart.id))) {
+          saveState();
           members.push({
             i: beamStart.id, j: n.id, color: selectedColor,
             E: parseFloat(document.getElementById('propE').value) || 200,
@@ -415,23 +457,42 @@ function handleClick(mx, my) {
     }
   } else if (['pin', 'roller', 'fixed'].includes(currentTool)) {
     const n = findNearestNode(mx, my, 20);
-    if (n) { supports = supports.filter(s => s.nodeId !== n.id); supports.push({ nodeId: n.id, type: currentTool }); updateUI(); }
+    if (n) { 
+      saveState();
+      supports = supports.filter(s => s.nodeId !== n.id); 
+      supports.push({ nodeId: n.id, type: currentTool }); 
+      updateUI(); 
+    }
   } else if (currentTool === 'pointLoad') {
     const n = findNearestNode(mx, my, 20);
-    if (n) { loads.push({ type: 'point', nodeId: n.id, magnitude: parseFloat(document.getElementById('loadMag').value) || 10, direction: document.getElementById('loadDir').value }); updateUI(); }
+    if (n) { 
+      saveState();
+      loads.push({ type: 'point', nodeId: n.id, magnitude: parseFloat(document.getElementById('loadMag').value) || 10, direction: document.getElementById('loadDir').value }); 
+      updateUI(); 
+    }
   } else if (currentTool === 'distLoad') {
     const m = findNearestMember(mx, my, 15);
-    if (m) { loads.push({ type: 'dist', memberId: members.indexOf(m), magnitude: parseFloat(document.getElementById('loadMag').value) || 10, direction: document.getElementById('loadDir').value }); updateUI(); }
+    if (m) { 
+      saveState();
+      loads.push({ type: 'dist', memberId: members.indexOf(m), magnitude: parseFloat(document.getElementById('loadMag').value) || 10, direction: document.getElementById('loadDir').value }); 
+      updateUI(); 
+    }
   } else if (currentTool === 'moment') {
     const n = findNearestNode(mx, my, 20);
-    if (n) { loads.push({ type: 'moment', nodeId: n.id, magnitude: parseFloat(document.getElementById('loadMag').value) || 10 }); updateUI(); }
+    if (n) { 
+      saveState();
+      loads.push({ type: 'moment', nodeId: n.id, magnitude: parseFloat(document.getElementById('loadMag').value) || 10 }); 
+      updateUI(); 
+    }
   } else if (currentTool === 'delete') {
     if (hoverNode) {
+      saveState();
       const id = hoverNode.id; nodes = nodes.filter(n => n.id !== id);
       members = members.filter(m => m.i !== id && m.j !== id);
       supports = supports.filter(s => s.nodeId !== id); loads = loads.filter(l => l.nodeId !== id);
       nodes.forEach((n, i) => n.id = i); hoverNode = null; updateUI();
     } else if (hoverMember) {
+      saveState();
       const idx = members.indexOf(hoverMember); members.splice(idx, 1);
       loads = loads.filter(l => l.memberId !== idx); hoverMember = null; updateUI();
     }
@@ -469,9 +530,9 @@ function updateUI() {
   }).join('');
 }
 
-function deleteNode(i)   { nodes.splice(i, 1); nodes.forEach((n, j) => n.id = j); updateUI(); draw(); }
-function deleteMember(i) { members.splice(i, 1); updateUI(); draw(); }
-function deleteLoad(i)   { loads.splice(i, 1); updateUI(); draw(); }
+function deleteNode(i)   { saveState(); nodes.splice(i, 1); nodes.forEach((n, j) => n.id = j); updateUI(); draw(); }
+function deleteMember(i) { saveState(); members.splice(i, 1); updateUI(); draw(); }
+function deleteLoad(i)   { saveState(); loads.splice(i, 1); updateUI(); draw(); }
 
 // ============================================================
 //  DRAW ENGINE
@@ -811,7 +872,7 @@ function drawReactions(w, h, u) {
 //  EXAMPLE STRUCTURES
 // ============================================================
 function loadExample(type) {
-  clearAll();
+  saveState();
   
   // Reset unit to Metric for Examples to display correctly
   if (curUnit !== 'metric') {
@@ -839,6 +900,7 @@ function loadExample(type) {
 }
 
 function clearAll() {
+  saveState();
   nodes = []; members = []; supports = []; loads = [];
   beamStart = null; results = null; hoverNode = null; hoverMember = null;
   updateUI(); draw(); drawDiagrams();
