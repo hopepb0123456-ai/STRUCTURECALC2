@@ -243,7 +243,7 @@ let hoverNode = null, hoverMember = null;
 
 // ---- ระบบ Undo (Undo System) ----
 let undoStack = [];
-const MAX_UNDO = 20; // เก็บย้อนหลังได้สูงสุด 20 ครั้ง
+const MAX_UNDO = 20;
 
 function saveState() {
   const state = JSON.stringify({ nodes, members, loads, supports });
@@ -252,34 +252,21 @@ function saveState() {
 }
 
 function undo() {
-  if (undoStack.length === 0) {
-    setStatus('Nothing to undo', '#64748b');
-    return;
-  }
+  if (undoStack.length === 0) { setStatus('Nothing to undo', '#64748b'); return; }
   const state = JSON.parse(undoStack.pop());
-  nodes = state.nodes;
-  members = state.members;
-  loads = state.loads;
-  supports = state.supports;
-  beamStart = null;
-  results = null; // ข้อมูลเปลี่ยนแล้ว ผลการวิเคราะห์เก่าต้องลบทิ้ง
-  updateUI();
-  draw();
-  drawDiagrams();
+  nodes = state.nodes; members = state.members; loads = state.loads; supports = state.supports;
+  beamStart = null; results = null;
+  updateUI(); draw(); drawDiagrams();
   setStatus('Undo successful', '#f59e0b');
 }
 
-// ผูกคีย์ลัด Ctrl+Z หรือ Cmd+Z
 window.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    e.preventDefault();
-    undo();
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
 });
 
 // ---- Change Units ----
 function changeUnit() {
-  saveState(); // เก็บ State ก่อนเปลี่ยนหน่วยด้วย เผื่ออยาก Undo
+  saveState();
   const newUnit = document.getElementById('unitSelect').value;
   const oldBaseL = UNIT_SYS[curUnit].toBase.l;
   const newBaseL = UNIT_SYS[newUnit].toBase.l;
@@ -692,9 +679,12 @@ function solve() {
       const m = members[l.memberId]; if (!m) return;
       const ni = m.i, nj = m.j, xi = nodes[ni].x * b.l, yi = nodes[ni].y * b.l, xj = nodes[nj].x * b.l, yj = nodes[nj].y * b.l;
       const L = Math.hypot(xj - xi, yj - yi), c = (xj - xi) / L, s = (yj - yi) / L;
-      const w = l.magnitude * (b.f / b.l), fv = { down: -1, up: 1 }[l.direction] || -1; // force per length in base unit
+      const fv = { down: -1, up: 1, left: -1, right: 1 }[l.direction] || -1; 
+      const w = l.magnitude * (b.f / b.l); // force per length in base unit
+      
       const fyA = fv * w * L / 2, mA = fv * w * L * L / 12, fyB = fv * w * L / 2, mB = -fv * w * L * L / 12;
-      F[ni*3] += -s * fyA; F[ni*3+1] += c * fyA; F[ni*3+2] += mA; F[nj*3] += -s * fyB; F[nj*3+1] += c * fyB; F[nj*3+2] += mB;
+      F[ni*3] += -s * fyA; F[ni*3+1] += c * fyA; F[ni*3+2] += mA; 
+      F[nj*3] += -s * fyB; F[nj*3+1] += c * fyB; F[nj*3+2] += mB;
     }
   });
 
@@ -709,6 +699,7 @@ function solve() {
   const U = gaussElim(K.map((r, i) => [...r, F[i]]));
   if (!U) { setStatus('Singular system — check support conditions', '#ef4444'); return; }
 
+  // ==== แก้ไขการคำนวณ Internal Member Forces ตรงนี้ครับ ====
   const memberResults = members.map((m, mi) => {
     const ni = m.i, nj = m.j, xi = nodes[ni].x * b.l, yi = nodes[ni].y * b.l, xj = nodes[nj].x * b.l, yj = nodes[nj].y * b.l;
     const L = Math.hypot(xj - xi, yj - yi), E = m.E * b.e, I = m.I * b.i, A = m.A * b.a, c = (xj - xi) / L, s2 = (yj - yi) / L, EI = E * I, EA = E * A;
@@ -718,19 +709,46 @@ function solve() {
       [EA/L, 0, 0, -EA/L, 0, 0], [0, 12*EI/L**3, 6*EI/L**2, 0, -12*EI/L**3, 6*EI/L**2], [0, 6*EI/L**2, 4*EI/L, 0, -6*EI/L**2, 2*EI/L],
       [-EA/L, 0, 0, EA/L, 0, 0], [0, -12*EI/L**3, -6*EI/L**2, 0, 12*EI/L**3, -6*EI/L**2], [0, 6*EI/L**2, 2*EI/L, 0, -6*EI/L**2, 4*EI/L]
     ];
+    
+    // 1. แรงจาก Displacement (k * d)
     const f = matVec(kl, dl);
+    
+    // 2. คำนวณ Distributed Load บนคาน
     let wDist = 0, wDir = 0;
-    loads.filter(l => l.type === 'dist' && l.memberId === mi).forEach(l => { wDist += l.magnitude * (b.f / b.l); wDir = ({ down: -1, up: 1 }[l.direction] || -1); });
+    loads.filter(l => l.type === 'dist' && l.memberId === mi).forEach(l => { 
+        wDist += l.magnitude * (b.f / b.l); 
+        wDir = ({ down: -1, up: 1, left: -1, right: 1 }[l.direction] || -1); 
+    });
+
+    const w_local = wDist * wDir; // ตัวอย่าง โหลดลง = ติดลบ
+    
+    // 3. สร้าง Fixed End Forces (FEF) - แรงที่ Support กระทำต่อคาน
+    const fef = [0, 0, 0, 0, 0, 0];
+    if (w_local !== 0) {
+        fef[1] = -w_local * L / 2;
+        fef[2] = -w_local * L * L / 12;
+        fef[4] = -w_local * L / 2;
+        fef[5] = w_local * L * L / 12;
+    }
+
+    // 4. แรงลัพธ์ทั้งหมดที่ปลายคาน (Total Member End Forces)
+    const f_tot = f.map((val, idx) => val + fef[idx]);
 
     const nPts = 41, xi2 = [], sfd = [], bmd = [], afd = [];
     for (let k = 0; k < nPts; k++) {
-      const x = L * k / (nPts - 1); xi2.push(x / b.l); // Convert length back for drawing
-      const V0 = -f[1], M0 = f[2], N0 = f[0];
-      sfd.push((V0 + wDist * wDir * x) / b.f);
-      bmd.push((M0 + V0 * x + wDist * wDir * x * x / 2) / b.m);
-      afd.push(N0 / b.f);
+      const x = L * k / (nPts - 1); 
+      xi2.push(x / b.l); 
+      
+      // การตัด Section Method เพื่อวาดกราฟที่ถูกต้อง:
+      const V_x = f_tot[1] + w_local * x; 
+      const M_x = -f_tot[2] + f_tot[1] * x + w_local * x * x / 2;
+      const N_x = -f_tot[0]; 
+
+      sfd.push(V_x / b.f);
+      bmd.push(M_x / b.m);
+      afd.push(N_x / b.f);
     }
-    return { memberId: mi, xi: xi2, sfd, bmd, afd, L: L / b.l }; // Convert L back for drawing
+    return { memberId: mi, xi: xi2, sfd, bmd, afd, L: L / b.l }; 
   });
 
   const reactions = supports.map(s => {
@@ -874,7 +892,6 @@ function drawReactions(w, h, u) {
 function loadExample(type) {
   saveState();
   
-  // Reset unit to Metric for Examples to display correctly
   if (curUnit !== 'metric') {
     document.getElementById('unitSelect').value = 'metric';
     curUnit = 'metric'; changeUnit();
